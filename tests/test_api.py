@@ -136,6 +136,45 @@ def test_api_executes_approved_scenario_with_configured_executor() -> None:
     assert execute_response.json()["live"]["reaudit"]["post_compliant"] is True
 
 
+def test_api_registers_inventory_device_and_audits_collected_configuration() -> None:
+    api_module.inventory_store.clear()
+    api_module.credential_store.clear()
+    api_module.scenario_store.clear()
+    api_module.collector = _FakeCollector()
+
+    register_response = client.post(
+        "/devices",
+        json={
+            "device_id": "lab-router-inventory",
+            "host": "192.0.2.20",
+            "device_type": "cisco_ios",
+            "credential_profile": "lab-router-profile",
+            "username": "lab-user",
+            "password": "lab-password",
+            "secret": "enable-secret",
+        },
+    )
+
+    assert register_response.status_code == 201
+    assert client.get("/devices").json()[0]["target"]["host"] == "192.0.2.20"
+    assert "password" not in register_response.json()
+    assert api_module.credential_store["lab-router-inventory"]["username"] == "lab-user"
+
+    audit_response = client.post(
+        "/devices/lab-router-inventory/audit",
+        json={
+            "scenario_id": "inventory-audit-001",
+            "rules": scenario_payload()["rules"],
+            "requested_by": "operator-01",
+        },
+    )
+
+    assert audit_response.status_code == 201
+    assert audit_response.json()["target"]["device_id"] == "lab-router-inventory"
+    assert audit_response.json()["configuration"] == "ntp server 10.10.10.20\n"
+    assert api_module.inventory_store["lab-router-inventory"].status == "reachable"
+
+
 class _ScenarioConnection:
     def __init__(self) -> None:
         self.reads = 0
@@ -153,3 +192,9 @@ class _ScenarioConnection:
 
     def disconnect(self) -> None:
         pass
+
+
+class _FakeCollector:
+    def collect(self, target) -> str:
+        assert target.host == "192.0.2.20"
+        return "ntp server 10.10.10.20\n"

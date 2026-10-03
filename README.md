@@ -90,6 +90,9 @@ Scenario endpoints used by the control-plane prototype:
 POST /scenarios/audit
 GET  /scenarios/{scenario_id}
 POST /scenarios/{scenario_id}/execute
+POST /devices
+GET  /devices
+POST /devices/{device_id}/audit
 ```
 
 `/scenarios/audit` accepts a sanitized Lab configuration and versioned rules,
@@ -97,6 +100,14 @@ then returns the findings, validated plans, and approval records. Execution is
 fail-closed: every generated approval must be approved and the API process must
 be configured with a Lab-only `ControlledExecutor`. Execution captures one
 pre-check/post-check pair for the scenario and returns the re-audit result.
+
+The Devices page accepts the lab username, password, and optional enable
+secret, but the backend stores them only in process memory. They are never
+returned by the inventory endpoints or displayed in the table. Restarting the
+API clears all credentials, so devices must be registered again before a live
+audit. The backend collects `show running-config` before starting the same
+audit and approval workflow. Remediation execution remains separately gated
+and lab-only.
 
 The approval CLI can be run with:
 

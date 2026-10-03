@@ -19,3 +19,19 @@
 .empty-state p{max-width:220px;font-size:12px}
 .scenario-footer{display:flex;justify-content:space-between;padding:15px 22px;color:#85878e;font-size:11px}
 @keyframes spin{to{transform:rotate(360deg)}}
+.inventory-layout{display:grid;grid-template-columns:minmax(260px,.8fr) minmax(420px,1.4fr);gap:18px}
+.inventory-form-panel,.inventory-list-panel{min-height:380px}
+.device-form{display:grid;gap:14px;padding:20px 22px}
+.device-form label{display:grid;gap:6px;color:#777a81;font-size:11px;font-weight:700}
+.device-form input,.device-form select{width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:7px;background:#fff;color:#303237;font:500 12px 'DM Sans',sans-serif}
+.device-form input:focus,.device-form select:focus{outline:2px solid #d7e8e0;border-color:#56a77d}
+.form-help{margin:0;color:#999ca2;font-size:11px;line-height:1.5}
+.optional-label{color:#a0a2a7;font-size:10px;font-weight:500}
+.device-table{display:grid}
+.device-card{display:flex;align-items:center;gap:12px;padding:16px 20px;border-top:1px solid var(--line)}
+.device-card-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:8px;background:#eef5f3;color:#428568}
+.device-card-main{display:grid;gap:3px;flex:1;min-width:0}
+.device-card-main strong{font-size:12px}.device-card-main span,.device-card-main small{color:#8f9298;font-size:10px}
+.inventory-status{padding:4px 7px;border-radius:5px;font-size:10px;font-weight:700;text-transform:capitalize}
+.inventory-status.registered{background:#f1f3f5;color:#777d85}.inventory-status.reachable{background:#e8f7ef;color:#32815d}.inventory-status.unreachable{background:#fff0f0;color:#ad5a5a}
+@media(max-width:900px){.inventory-layout{grid-template-columns:1fr}.device-card{flex-wrap:wrap}.device-card-main{min-width:180px}}
