@@ -58,6 +58,9 @@ def test_metrics_calculator_summarizes_experiment_runs() -> None:
     assert summary["regression_rate_percent"] == 50.0
     assert summary["average_latency_seconds"] == 2.0
     assert summary["total_api_cost"] == 0.03
+    assert summary["hallucination_false_positive_rate_percent"] == 0.0
+    assert summary["schema_failure_rate_percent"] == 0.0
+    assert summary["guardrail_blocker_efficiency_percent"] == 0.0
 
 
 def test_metrics_reject_empty_runs() -> None:

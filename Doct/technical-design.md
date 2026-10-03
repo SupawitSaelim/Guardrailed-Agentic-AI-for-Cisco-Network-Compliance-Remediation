@@ -52,6 +52,22 @@ class DeviceExecutor(Protocol):
     def execute(self, target: LabTarget, commands: list[str]) -> ExecutionResult: ...
 ```
 
+The implemented workflow now exposes a `run_target` entry point that collects
+the sanitized running configuration before auditing. The resulting
+configuration hash is retained as the expected pre-execution snapshot.
+`ControlledExecutor` compares its fresh pre-check with that hash and refuses
+to write when configuration drift is detected. Approval and execution are
+still separate state transitions.
+For a multi-fault scenario, its batch operation verifies every approval before
+opening one connection, submits the combined command set, captures one
+post-check configuration, and returns that snapshot to re-audit.
+
+The FastAPI transport exposes scenario-level audit, retrieval, and execution
+endpoints around this workflow. The API keeps scenario state in memory for the
+prototype; a persistent store is required before production use. The execute
+endpoint refuses to run unless all scenario approvals are approved and a
+Lab-only executor has been explicitly configured.
+
 ## 4. Implementation order
 
 1. Pydantic data contracts and fixture loading.

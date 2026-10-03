@@ -7,13 +7,18 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.approval import ApprovalService
 from app.approval.service import ApprovalRecord
 from app.audit import AuditTrail
+from app.collection import LabTarget, NetmikoCollector
 from app.compliance import ComplianceEngine
+from app.execution import ControlledExecutor, configuration_hash
 from app.models import (
     ComplianceRule,
     Finding,
     RemediationPlan,
     ValidationResult,
+    ExecutionResult,
+    ReauditResult,
 )
+from app.reaudit import ReauditService
 from app.validation import CommandScopeValidator
 
 
@@ -29,10 +34,18 @@ class WorkflowResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     status: WorkflowStatus
+    configuration_hash: str | None = None
     findings: list[Finding] = Field(default_factory=list)
     plans: list[RemediationPlan] = Field(default_factory=list)
     validations: list[ValidationResult] = Field(default_factory=list)
     approvals: list[ApprovalRecord] = Field(default_factory=list)
+
+
+class LiveWorkflowResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    execution: ExecutionResult
+    reaudit: ReauditResult
 
 
 class WorkflowOrchestrator:
@@ -59,6 +72,7 @@ class WorkflowOrchestrator:
         device_id: str,
         requested_by: str,
     ) -> WorkflowResult:
+        source_hash = configuration_hash(configuration)
         self._record("workflow.started", {"device_id": device_id, "requested_by": requested_by})
         audit_result = self.compliance_engine.audit(configuration, rules, device_id)
         self._record(
@@ -71,7 +85,7 @@ class WorkflowOrchestrator:
         )
         if audit_result.compliant:
             self._record("workflow.completed", {"status": "compliant"})
-            return WorkflowResult(status="compliant")
+            return WorkflowResult(status="compliant", configuration_hash=source_hash)
 
         rules_by_id = {rule.rule_id: rule for rule in rules}
         plans: list[RemediationPlan] = []
@@ -114,6 +128,7 @@ class WorkflowOrchestrator:
         )
         result = WorkflowResult(
             status=status,
+            configuration_hash=source_hash,
             findings=audit_result.findings,
             plans=plans,
             validations=validations,
@@ -124,6 +139,48 @@ class WorkflowOrchestrator:
             {"status": result.status, "approval_count": len(result.approvals)},
         )
         return result
+
+    def run_target(
+        self,
+        target: LabTarget,
+        rules: list[ComplianceRule],
+        requested_by: str,
+        collector: NetmikoCollector,
+    ) -> WorkflowResult:
+        """Collect a lab target and run the same workflow against its snapshot."""
+        configuration = collector.collect(target)
+        return self.run(configuration, rules, target.device_id, requested_by)
+
+    def execute_approved(
+        self,
+        approvals: list[ApprovalRecord],
+        target: LabTarget,
+        original_configuration: str,
+        rules: list[ComplianceRule],
+        executor: ControlledExecutor,
+    ) -> LiveWorkflowResult:
+        """Execute one approved scenario and immediately re-audit its result."""
+        if not rules:
+            raise ValueError("At least one compliance rule is required")
+        if any(approval.finding.rule_version != rules[0].version for approval in approvals):
+            raise ValueError("Approval rule versions must match the execution rules")
+        before = self.compliance_engine.audit(
+            original_configuration,
+            rules,
+            target.device_id,
+        )
+        report = executor.execute_many(
+            approvals,
+            target,
+            expected_precheck_hash=configuration_hash(original_configuration),
+        )
+        after = self.compliance_engine.audit(
+            report.post_configuration,
+            rules,
+            target.device_id,
+        )
+        reaudit = ReauditService(audit_trail=self.audit_trail).compare(before, after)
+        return LiveWorkflowResult(execution=report.result, reaudit=reaudit)
 
     def _record(self, event_type: str, payload: dict[str, object]) -> None:
         if self.audit_trail:

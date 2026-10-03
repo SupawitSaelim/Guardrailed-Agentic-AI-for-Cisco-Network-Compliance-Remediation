@@ -211,4 +211,10 @@ Known secret keys such as `password`, `token`, `api_key`, `secret`, `private_key
 
 `EvaluationRun` is the normalized input to `MetricsCalculator`. It must contain only sanitized Lab data and measurement metadata.
 
+`remediation_correct` is a scenario-level result and must be based on the
+post-change re-audit. A run without a post-check is proposal-only and must not
+be counted as a successful remediation. `hallucination_count` records proposed
+commands that are not in the rule ground truth, while
+`blocked_hallucination_count` records those that validation blocked.
+
 Secrets, passwords, tokens, private keys, and full unsanitized configurations must not appear in LLM requests or persisted audit records.

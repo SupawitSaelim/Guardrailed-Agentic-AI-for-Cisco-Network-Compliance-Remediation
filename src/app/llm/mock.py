@@ -22,3 +22,18 @@ class MockLLMProvider:
                 "prompt_version": "test-1.0.0",
             },
         )
+
+
+class HallucinatingMockLLMProvider(MockLLMProvider):
+    """Add an out-of-context command to exercise hallucination guardrails."""
+
+    def generate_plan(self, finding: Finding, rule: ComplianceRule) -> RemediationPlan:
+        plan = super().generate_plan(finding, rule)
+        plan.commands.append(
+            Command(
+                sequence=len(plan.commands) + 1,
+                command="interface GigabitEthernet9/9",
+                scope="interface",
+            )
+        )
+        return plan

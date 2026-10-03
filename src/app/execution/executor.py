@@ -2,6 +2,7 @@
 
 import hashlib
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
@@ -14,6 +15,12 @@ from app.models import ExecutionResult
 
 CredentialProvider = Callable[[LabTarget], dict[str, Any]]
 ConnectionFactory = Callable[..., Any]
+
+
+@dataclass(frozen=True)
+class ExecutionReport:
+    result: ExecutionResult
+    post_configuration: str
 
 
 class ControlledExecutor:
@@ -29,10 +36,37 @@ class ControlledExecutor:
         self.connection_factory = connection_factory
         self.audit_trail = audit_trail
 
-    def execute(self, approval: ApprovalRecord, target: LabTarget) -> ExecutionResult:
-        self._check_execution_boundary(approval, target)
+    def execute(
+        self,
+        approval: ApprovalRecord,
+        target: LabTarget,
+        expected_precheck_hash: str | None = None,
+    ) -> ExecutionResult:
+        return self.execute_many(
+            [approval],
+            target,
+            expected_precheck_hash=expected_precheck_hash,
+        ).result
 
-        commands = [item.command for item in approval.plan.commands]
+    def execute_many(
+        self,
+        approvals: list[ApprovalRecord],
+        target: LabTarget,
+        expected_precheck_hash: str | None = None,
+    ) -> ExecutionReport:
+        if not approvals:
+            raise ValueError("At least one approved remediation plan is required")
+        for approval in approvals:
+            self._check_execution_boundary(approval, target)
+        approvers = {approval.decided_by for approval in approvals}
+        if len(approvers) != 1:
+            raise PermissionError("All plans in a batch must have the same approver")
+
+        commands = [
+            item.command
+            for approval in approvals
+            for item in approval.plan.commands
+        ]
         connection_parameters = self.credential_provider(target)
         connection = self.connection_factory(
             device_type=target.device_type,
@@ -42,6 +76,14 @@ class ControlledExecutor:
         started_at = datetime.now(timezone.utc)
         try:
             precheck = connection.send_command("show running-config")
+            precheck_hash = configuration_hash(precheck)
+            if (
+                expected_precheck_hash is not None
+                and precheck_hash != expected_precheck_hash
+            ):
+                raise RuntimeError(
+                    "Pre-execution configuration changed since the audit"
+                )
             connection.send_config_set(commands)
             postcheck = connection.send_command("show running-config")
         finally:
@@ -51,11 +93,11 @@ class ControlledExecutor:
         result = ExecutionResult(
             execution_id=f"exec-{uuid4().hex}",
             device_id=target.device_id,
-            approved_by=approval.decided_by or "unknown",
+            approved_by=next(iter(approvers)) or "unknown",
             commands=commands,
             success=True,
-            precheck_hash=_hash_configuration(precheck),
-            postcheck_hash=_hash_configuration(postcheck),
+            precheck_hash=precheck_hash,
+            postcheck_hash=configuration_hash(postcheck),
             started_at=started_at,
             finished_at=finished_at,
         )
@@ -71,7 +113,7 @@ class ControlledExecutor:
                     "postcheck_hash": result.postcheck_hash,
                 },
             )
-        return result
+        return ExecutionReport(result=result, post_configuration=postcheck)
 
     @staticmethod
     def _check_execution_boundary(approval: ApprovalRecord, target: LabTarget) -> None:
@@ -81,8 +123,10 @@ class ControlledExecutor:
             raise PermissionError("The approved plan must have a valid validation result")
         if target.lab_only is not True:
             raise PermissionError("Execution is restricted to lab targets")
+        if approval.finding.device_id != target.device_id:
+            raise PermissionError("Approval and execution target must be the same device")
 
 
-def _hash_configuration(configuration: str) -> str:
+def configuration_hash(configuration: str) -> str:
     digest = hashlib.sha256(configuration.encode("utf-8")).hexdigest()
     return f"sha256:{digest}"

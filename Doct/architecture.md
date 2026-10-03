@@ -61,10 +61,19 @@ Presents the proposed commands and validation results to the operator and record
 ### Execution Controller
 
 The only component permitted to use write credentials. It connects only to an explicitly registered lab target.
+Before writing, it compares the fresh running-configuration hash with the
+snapshot used for the audit and fails closed on drift.
+For a multi-fault scenario, approved plans are batched into one connection
+session and one pre-check/post-check pair so later plans do not look like
+configuration drift caused by earlier plans in the same scenario.
 
 ### Re-auditor
 
 Runs post-checks and the compliance engine again, then detects unresolved findings and regressions.
+
+Scenario evaluation counts remediation as correct only when the complete
+post-change configuration passes this re-audit. Approval and plan validation
+are recorded as intermediate results, not as remediation success.
 
 ## 3. Trust rules
 

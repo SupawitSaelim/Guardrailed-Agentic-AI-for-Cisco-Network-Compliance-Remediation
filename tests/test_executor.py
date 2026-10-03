@@ -2,7 +2,7 @@ import pytest
 
 from app.approval import ApprovalService
 from app.collection import LabTarget
-from app.execution import ControlledExecutor
+from app.execution import ControlledExecutor, configuration_hash
 from app.models import Command, Finding, RemediationPlan, ValidationResult
 
 
@@ -89,3 +89,56 @@ def test_executor_rejects_pending_approval() -> None:
             make_approval(status="pending"),
             LabTarget(device_id="lab-router-01", host="192.0.2.10", device_type="cisco_ios"),
         )
+
+
+def test_executor_rejects_configuration_drift_before_writing() -> None:
+    fake_connection = FakeConnection()
+    executor = ControlledExecutor(
+        credential_provider=lambda target: {},
+        connection_factory=lambda **parameters: fake_connection,
+    )
+
+    with pytest.raises(RuntimeError, match="configuration changed"):
+        executor.execute(
+            make_approval(),
+            LabTarget(device_id="lab-router-01", host="192.0.2.10", device_type="cisco_ios"),
+            expected_precheck_hash=configuration_hash("different configuration\n"),
+        )
+
+    assert fake_connection.config_sets == []
+
+
+def test_executor_rejects_approval_for_another_device() -> None:
+    executor = ControlledExecutor(
+        credential_provider=lambda target: {},
+        connection_factory=lambda **parameters: FakeConnection(),
+    )
+
+    with pytest.raises(PermissionError, match="same device"):
+        executor.execute(
+            make_approval(),
+            LabTarget(device_id="lab-router-02", host="192.0.2.11", device_type="cisco_ios"),
+        )
+
+
+def test_executor_batches_approved_plans_with_one_precheck() -> None:
+    fake_connection = FakeConnection()
+    first = make_approval()
+    second = make_approval()
+    executor = ControlledExecutor(
+        credential_provider=lambda target: {},
+        connection_factory=lambda **parameters: fake_connection,
+    )
+
+    report = executor.execute_many(
+        [first, second],
+        LabTarget(device_id="lab-router-01", host="192.0.2.10", device_type="cisco_ios"),
+        expected_precheck_hash=configuration_hash("ntp server 10.10.10.20\n"),
+    )
+
+    assert report.result.success is True
+    assert report.post_configuration == "ntp server 10.10.10.10\n"
+    assert fake_connection.commands == ["show running-config", "show running-config"]
+    assert fake_connection.config_sets == [
+        ["ntp server 10.10.10.10", "ntp server 10.10.10.10"]
+    ]

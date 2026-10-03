@@ -53,6 +53,19 @@ Each run must store:
 - Error category.
 - Timing and token usage.
 
+Remediation Correctness is a scenario-level outcome. A scenario with multiple
+findings is correct only when the complete post-change configuration passes
+re-audit without unresolved findings or regressions. Approval count and
+plan-level validation results are supporting measurements, not substitutes for
+the post-re-audit outcome. A proposal-only run must not be recorded as a
+successful remediation.
+
+For fixture-based evaluation, the runner may receive a sanitized
+`post_configuration` representing the captured post-change device state. This
+is a re-audit fixture, not evidence that a real device write occurred. Live
+execution must populate the same post-check and re-audit fields from the lab
+executor.
+
 ## Pilot before final experiment
 
 The pilot must verify that:

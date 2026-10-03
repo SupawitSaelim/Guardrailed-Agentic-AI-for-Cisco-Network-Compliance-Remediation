@@ -84,6 +84,20 @@ uvicorn app.api:app --app-dir src --reload
 The API is available at `http://127.0.0.1:8000`. Interactive OpenAPI
 documentation is available at `/docs`.
 
+Scenario endpoints used by the control-plane prototype:
+
+```text
+POST /scenarios/audit
+GET  /scenarios/{scenario_id}
+POST /scenarios/{scenario_id}/execute
+```
+
+`/scenarios/audit` accepts a sanitized Lab configuration and versioned rules,
+then returns the findings, validated plans, and approval records. Execution is
+fail-closed: every generated approval must be approved and the API process must
+be configured with a Lab-only `ControlledExecutor`. Execution captures one
+pre-check/post-check pair for the scenario and returns the re-audit result.
+
 The approval CLI can be run with:
 
 ```bash

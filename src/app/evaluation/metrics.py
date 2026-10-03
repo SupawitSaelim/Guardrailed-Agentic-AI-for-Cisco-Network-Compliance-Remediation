@@ -15,6 +15,9 @@ class EvaluationRun(BaseModel):
     input_tokens: int = Field(ge=0)
     output_tokens: int = Field(ge=0)
     api_cost: float = Field(ge=0)
+    hallucination_count: int = Field(default=0, ge=0)
+    schema_failure: bool = False
+    blocked_hallucination_count: int = Field(default=0, ge=0)
 
 
 class MetricsCalculator:
@@ -27,6 +30,7 @@ class MetricsCalculator:
         total_commands = sum(run.proposed_command_count for run in runs)
         unsafe_commands = sum(run.unsafe_command_count for run in runs)
         count = len(runs)
+        hallucinations = sum(run.hallucination_count for run in runs)
         return {
             "remediation_correctness_percent": _percent(
                 sum(run.remediation_correct for run in runs), count
@@ -40,6 +44,14 @@ class MetricsCalculator:
             "total_input_tokens": float(sum(run.input_tokens for run in runs)),
             "total_output_tokens": float(sum(run.output_tokens for run in runs)),
             "total_api_cost": sum(run.api_cost for run in runs),
+            "hallucination_false_positive_rate_percent": _percent(hallucinations, count),
+            "schema_failure_rate_percent": _percent(
+                sum(run.schema_failure for run in runs), count
+            ),
+            "guardrail_blocker_efficiency_percent": _percent(
+                sum(run.blocked_hallucination_count for run in runs),
+                hallucinations,
+            ),
         }
 
 
