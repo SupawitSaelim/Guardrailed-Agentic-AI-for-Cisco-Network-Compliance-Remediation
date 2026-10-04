@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Export Mermaid Diagram</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<style>
+:root{--bg:#F4F5F7;--surface:#fff;--ink:#1B2733;--muted:#5A6874;--line:#D9DEE3;--accent:#3D5A80}
+:root:not([data-theme="light"]){}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){--bg:#12181E;--surface:#1B242D;--ink:#E6ECF1;--muted:#96A3AF;--line:#2E3944;--accent:#7FA6D6}
+}
+:root[data-theme="dark"]{--bg:#12181E;--surface:#1B242D;--ink:#E6ECF1;--muted:#96A3AF;--line:#2E3944;--accent:#7FA6D6}
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 system-ui,"Segoe UI",Tahoma,sans-serif}
+header{padding:16px 18px 8px;max-width:1100px;margin:0 auto}
+h1{font-size:19px;font-weight:600;margin:0 0 2px}
+p{color:var(--muted);margin:0;font-size:13.5px}
+.tabs{display:flex;gap:8px;padding:10px 18px;max-width:1100px;margin:0 auto;flex-wrap:wrap}
+.tabs button{font:inherit;font-size:14px;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.tabs button[aria-selected="true"]{border-color:var(--accent);color:var(--accent);font-weight:600}
+.toolbar{display:flex;gap:8px;padding:0 18px 10px;max-width:1100px;margin:0 auto;flex-wrap:wrap}
+.toolbar button{font:inherit;font-size:13.5px;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.stage{max-width:1100px;margin:0 auto 20px;padding:0 18px}
+.frame{position:relative;height:min(72vh,720px);border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden;touch-action:none}
+.frame .view{position:absolute;top:0;left:0;transform-origin:0 0;cursor:grab;padding:24px}
+.frame .view:active{cursor:grabbing}
+.hint{position:absolute;bottom:8px;right:10px;font-size:12px;color:var(--muted);background:var(--surface);padding:2px 8px;border-radius:99px;border:1px solid var(--line)}
+.panel{display:none}
+.panel.active{display:block}
+svg{max-width:none !important}
+</style>
+</head>
+<body>
+<header>
+  <h1>Export Mermaid Diagram</h1>
+  <p>เลื่อนล้อเมาส์เพื่อซูม ลากเพื่อเลื่อนดู แล้วกดดาวน์โหลด SVG หรือ PNG ความละเอียดสูง</p>
+</header>
+
+<div class="tabs" role="tablist">
+  <button role="tab" data-t="flow" aria-selected="true">Flowchart (12 ขั้น)</button>
+  <button role="tab" data-t="seq" aria-selected="false">Sequence Diagram</button>
+</div>
+
+<div class="toolbar">
+  <button data-a="in">ซูมเข้า</button>
+  <button data-a="out">ซูมออก</button>
+  <button data-a="reset">รีเซ็ตมุมมอง</button>
+  <button data-a="svg">ดาวน์โหลด SVG</button>
+  <button data-a="png">ดาวน์โหลด PNG</button>
+</div>
+
+<div class="stage">
+  <div class="panel active" id="p-flow"><div class="frame" data-frame><div class="view"><pre class="mermaid" id="src-flow"></pre></div><span class="hint">scroll = zoom · drag = pan</span></div></div>
+  <div class="panel" id="p-seq"><div class="frame" data-frame><div class="view"><pre class="mermaid" id="src-seq"></pre></div><span class="hint">scroll = zoom · drag = pan</span></div></div>
+</div>
+
+<script>
+document.getElementById('src-flow').textContent = `flowchart TD
+    S1["1. ดึงค่า Config จากอุปกรณ์<br><small>อ่านอย่างเดียว ไม่แก้อะไร</small>"]
+    S2["2. ตรวจเทียบกฎที่กำหนด<br><small>ระบบตัดสินเอง ผ่าน/ไม่ผ่าน</small>"]
+    E1["ผ่านครบทุกข้อ<br><small>จบ ไม่ต้องแก้อะไร</small>"]
+    S3["3. สรุปสิ่งที่ผิด + เตรียมข้อมูล<br><small>ค่าที่ควรเป็น ค่าจริง ขอบเขตที่แก้ได้</small>"]
+    S4["4. AI เขียนแผนการแก้<br><small>เสนอเป็นรายการคำสั่ง แค่นั้น</small>"]
+    E2["AI ทำแค่ขั้นนี้ขั้นเดียว<br><small>ไม่มีรหัสผ่าน ไม่แตะอุปกรณ์</small>"]
+    S5["5. ตรวจรูปแบบคำตอบของ AI<br><small>เขียนตามแบบฟอร์มที่กำหนดไหม</small>"]
+    E3["ไม่ผ่าน<br><small>ตีกลับให้ AI ทำใหม่ (ขั้น 4)</small>"]
+    S6["6. ตรวจคำสั่งทีละบรรทัด<br><small>ไม่เกินขอบเขต ไม่มีคำสั่งอันตราย</small>"]
+    E4["ไม่ผ่าน<br><small>บล็อกคำสั่งนั้น ไม่ให้ไปต่อ</small>"]
+    S7["7. วิศวกรตรวจแผนและอนุมัติ<br><small>คนกดอนุมัติเอง ก่อนรันทุกครั้ง</small>"]
+    E5["ปฏิเสธ<br><small>หยุด แล้วบันทึกผล</small>"]
+    S8["8. เก็บสำเนา Config ก่อนแก้<br><small>เช็กว่า Config ไม่เปลี่ยนจากตอนวิเคราะห์</small>"]
+    S9["9. ส่งคำสั่งเข้าอุปกรณ์ Lab<br><small>ระบบรันเอง ใช้สิทธิ์แยกจากฝั่ง AI</small>"]
+    S10["10. ตรวจผลทันทีหลังแก้<br><small>คำสั่งเข้าอุปกรณ์จริงไหม</small>"]
+    S11["11. ตรวจกฎทั้งหมดซ้ำอีกรอบ<br><small>ข้อที่แก้ผ่านไหม ข้ออื่นพังไหม</small>"]
+    E6["ผ่าน = สำเร็จ<br><small>ไม่ผ่าน = บันทึกว่าล้มเหลว</small>"]
+    S12["12. บันทึกผลทั้งหมด<br><small>คำสั่ง เวลา ต้นทุน และ log</small>"]
+
+    S1 --> S2
+    S2 -.-> E1
+    S2 --> S3
+    S3 --> S4
+    S4 -.-> E2
+    S4 --> S5
+    S5 -.-> E3
+    E3 -.-> S4
+    S5 --> S6
+    S6 -.-> E4
+    S6 --> S7
+    S7 -.-> E5
+    S7 --> S8
+    S8 --> S9
+    S9 --> S10
+    S10 --> S11
+    S11 -.-> E6
+    S11 --> S12
+
+    classDef sys fill:#EDEFF1,stroke:#5A6874,color:#1B2733
+    classDef ai fill:#ECEAFB,stroke:#5B4BD5,color:#2A2265
+    classDef human fill:#FBF0DC,stroke:#95570C,color:#5C3806
+    classDef note fill:#FFFFFF,stroke:#D3DAE1,color:#5A6874,stroke-dasharray:4 3
+
+    class S1,S2,S3,S5,S6,S8,S9,S10,S11,S12 sys
+    class S4 ai
+    class S7 human
+    class E1,E2,E3,E4,E5,E6 note`;
+
+document.getElementById('src-seq').textContent = `sequenceDiagram
+    actor Eng as วิศวกร
+    participant Sys as ระบบ (Rule Engine/Orchestrator)
+    participant AI as AI
+    participant Dev as อุปกรณ์ Lab
+
+    Sys->>Dev: 1. ดึงค่า Config (อ่านอย่างเดียว)
+    Dev-->>Sys: running-config
+
+    Sys->>Sys: 2. ตรวจเทียบกฎที่กำหนด
+
+    alt ผ่านครบทุกข้อ
+        Sys-->>Eng: จบ ไม่ต้องแก้อะไร
+    else มีข้อไม่ผ่าน
+        Sys->>Sys: 3. สรุปสิ่งที่ผิด + เตรียมข้อมูล (finding, ค่าที่ควรเป็น/ค่าจริง, config ส่วนที่เกี่ยวข้อง, ขอบเขต)
+
+        loop จนกว่าจะผ่านรูปแบบ (จำกัดจำนวนครั้ง)
+            Sys->>AI: 4. ส่งโจทย์ ขอแผนแก้
+            AI-->>Sys: แผนแก้ (รายการคำสั่ง เป็น JSON)
+            Sys->>Sys: 5. ตรวจรูปแบบคำตอบ
+            Note over Sys,AI: ไม่ผ่านรูปแบบ → ตีกลับขั้น 4
+        end
+
+        Sys->>Sys: 6. ตรวจคำสั่งทีละบรรทัด (ในขอบเขต / ไม่อันตราย)
+        Note over Sys: บรรทัดที่ไม่ผ่าน ถูกบล็อกทิ้ง
+
+        Sys->>Eng: 7. ส่งแผนที่ผ่านด่านให้ตรวจ
+        Eng-->>Sys: อนุมัติ / ปฏิเสธ
+
+        alt ปฏิเสธ
+            Sys->>Sys: 12. บันทึกผล (หยุด ไม่รัน)
+        else อนุมัติ
+            Sys->>Dev: 8. เก็บสำเนา Config ก่อนแก้
+            Dev-->>Sys: snapshot/hash
+
+            Sys->>Dev: 9. ส่งคำสั่งที่อนุมัติแล้วเข้ารัน
+            Dev-->>Sys: ผลการรัน
+
+            Sys->>Dev: 10. ดึง Config มาตรวจผลทันที
+            Dev-->>Sys: running-config ล่าสุด
+
+            Sys->>Sys: 11. ตรวจกฎทั้งหมดซ้ำ
+
+            alt ผ่านหมด ไม่มี Regression
+                Sys->>Eng: สำเร็จ
+            else มีข้อพัง
+                Sys->>Eng: ล้มเหลว (Regression)
+            end
+
+            Sys->>Sys: 12. บันทึกผลทั้งหมด (คำสั่ง เวลา ต้นทุน log)
+        end
+    end`;
+
+mermaid.initialize({startOnLoad:true,securityLevel:'loose',theme:'default',flowchart:{htmlLabels:true},fontFamily:'system-ui, sans-serif'});
+
+var state={flow:{z:1,x:0,y:0},seq:{z:1,x:0,y:0}},active='flow';
+
+function applyT(key){
+  var f=document.querySelector('#p-'+key+' .view');
+  var s=state[key];
+  f.style.transform='translate('+s.x+'px,'+s.y+'px) scale('+s.z+')';
+}
+
+document.querySelectorAll('.tabs button').forEach(function(b){
+  b.addEventListener('click',function(){
+    document.querySelectorAll('.tabs button').forEach(function(x){x.setAttribute('aria-selected','false')});
+    b.setAttribute('aria-selected','true');
+    active=b.getAttribute('data-t');
+    document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active')});
+    document.getElementById('p-'+active).classList.add('active');
+  });
+});
+
+document.querySelectorAll('[data-frame]').forEach(function(frame){
+  var key=frame.closest('.panel').id.replace('p-','');
+  var dragging=false,sx=0,sy=0;
+  frame.addEventListener('wheel',function(e){
+    e.preventDefault();
+    var s=state[key];
+    var delta=e.deltaY<0?1.1:0.9;
+    s.z=Math.min(6,Math.max(0.3,s.z*delta));
+    applyT(key);
+  },{passive:false});
+  frame.addEventListener('pointerdown',function(e){
+    dragging=true;sx=e.clientX-state[key].x;sy=e.clientY-state[key].y;frame.setPointerCapture(e.pointerId);
+  });
+  frame.addEventListener('pointermove',function(e){
+    if(!dragging)return;
+    state[key].x=e.clientX-sx;state[key].y=e.clientY-sy;applyT(key);
+  });
+  ['pointerup','pointercancel'].forEach(function(ev){frame.addEventListener(ev,function(){dragging=false})});
+});
+
+document.querySelectorAll('.toolbar button').forEach(function(b){
+  b.addEventListener('click',function(){
+    var a=b.getAttribute('data-a');
+    var s=state[active];
+    if(a==='in'){s.z=Math.min(6,s.z*1.25);applyT(active)}
+    else if(a==='out'){s.z=Math.max(0.3,s.z/1.25);applyT(active)}
+    else if(a==='reset'){s.z=1;s.x=0;s.y=0;applyT(active)}
+    else if(a==='svg'){downloadSVG()}
+    else if(a==='png'){downloadPNG()}
+  });
+});
+
+function getSVG(){return document.querySelector('#p-'+active+' svg')}
+
+function downloadSVG(){
+  var svg=getSVG();if(!svg)return;
+  var clone=svg.cloneNode(true);
+  clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  var data=new XMLSerializer().serializeToString(clone);
+  var blob=new Blob([data],{type:'image/svg+xml'});
+  triggerDownload(URL.createObjectURL(blob),active+'-diagram.svg');
+}
+
+function downloadPNG(){
+  var svg=getSVG();if(!svg)return;
+  var clone=svg.cloneNode(true);
+  clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  var box=svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width ? svg.viewBox.baseVal : {width:svg.getBBox().width,height:svg.getBBox().height};
+  var scale=3;
+  var w=Math.max(1,Math.round(box.width*scale)),h=Math.max(1,Math.round(box.height*scale));
+  var data=new XMLSerializer().serializeToString(clone);
+  var img=new Image();
+  var svgBlob=new Blob([data],{type:'image/svg+xml;charset=utf-8'});
+  var url=URL.createObjectURL(svgBlob);
+  img.onload=function(){
+    var canvas=document.createElement('canvas');
+    canvas.width=w;canvas.height=h;
+    var ctx=canvas.getContext('2d');
+    ctx.fillStyle='#ffffff';ctx.fillRect(0,0,w,h);
+    ctx.drawImage(img,0,0,w,h);
+    URL.revokeObjectURL(url);
+    canvas.toBlob(function(blob){triggerDownload(URL.createObjectURL(blob),active+'-diagram.png')});
+  };
+  img.src=url;
+}
+
+function triggerDownload(href,name){
+  var a=document.createElement('a');
+  a.href=href;a.download=name;document.body.appendChild(a);a.click();a.remove();
+}
+</script>
+
+<!--claude-mermaid-runtime-begin:3477-->
+<style>.mermaid-diagram{margin-block:4px}.mermaid-diagram svg{display:block;margin:0 auto;max-width:100%;height:auto}</style>
+<script src="/_runtime/mermaid-11.16.1.min.js"></script>
+<script>(function(){
+var CFG={"palettes":{"light":{"surface":"#f4efe4","text":"#42392e","line":"#8a7f6d","border":"#7a6c52","bg":"#fffdf8"},"dark":{"surface":"#262b34","text":"#f2f3f5","line":"#a8adb8","border":"#9aa4b8","bg":"#1f232b"}}};
+if(typeof mermaid==='undefined')return;
+var pres=Array.prototype.slice.call(document.querySelectorAll('pre.mermaid')).filter(function(p){if(p.hasAttribute('data-claude-mermaid-claimed'))return false;p.setAttribute('data-claude-mermaid-claimed','1');return true;});
+if(!pres.length)return;
+var mq=window.matchMedia?window.matchMedia('(prefers-color-scheme: dark)'):null;
+var root=document.documentElement;
+var items=pres.map(function(pre){
+var mount=document.createElement('div');mount.className='mermaid-diagram';
+return {pre:pre,mount:mount,src:pre.textContent||''};
+});
+var seq=0;
+var renderGen=0;
+var lastKey='';
+function pageBg(fallback){
+var els=[document.body,document.documentElement];
+for(var i=0;i<els.length;i++){
+var c=els[i]&&getComputedStyle(els[i]).backgroundColor;
+if(c&&c!=='transparent'&&c!=='rgba(0, 0, 0, 0)')return c;
+}
+return fallback;
+}
+function render(){
+var theme=root.getAttribute('data-theme');
+var dark=theme==='dark'||(!!(mq&&mq.matches)&&theme!=='light');
+var pal=dark?CFG.palettes.dark:CFG.palettes.light;
+var bg=pageBg(pal.bg);
+var key=(dark?'d':'l')+'|'+bg;
+if(key===lastKey)return;
+lastKey=key;
+var gen=++renderGen;
+var font=getComputedStyle(document.body).fontFamily||'sans-serif';
+var nat={useMaxWidth:false};
+mermaid.initialize({
+startOnLoad:false,securityLevel:'strict',theme:'base',
+flowchart:nat,sequence:nat,er:nat,state:nat,class:nat,pie:nat,
+gantt:nat,journey:nat,timeline:nat,gitGraph:nat,mindmap:nat,xyChart:nat,
+quadrantChart:nat,sankey:nat,c4:nat,requirement:nat,block:nat,
+packet:nat,kanban:nat,architecture:nat,radar:nat,
+themeVariables:{background:bg,mainBkg:pal.surface,primaryColor:pal.surface,
+primaryTextColor:pal.text,lineColor:pal.line,primaryBorderColor:pal.border,
+nodeBorder:pal.border,clusterBorder:pal.border,edgeLabelBackground:bg,
+clusterBkg:'rgba(127,127,127,0.07)',titleColor:pal.text,
+darkMode:dark,rowOdd:bg,rowEven:'rgba(127,127,127,0.07)',
+attributeBackgroundColorOdd:bg,attributeBackgroundColorEven:'rgba(127,127,127,0.07)',
+fontSize:'16px',fontFamily:font},
+themeCSS:'.node rect, .node circle, .node polygon, .node path, .cluster rect { stroke-width: 2px; }'
+});
+items.forEach(function(it){
+var id='claude-mermaid-'+seq++;
+mermaid.render(id,it.src).then(function(r){
+if(gen!==renderGen)return;
+var prev=it.pre.previousElementSibling;
+if(prev&&prev.className==='mermaid-diagram'&&prev!==it.mount)return;
+it.mount.innerHTML=r.svg;
+if(!it.mount.parentNode)it.pre.parentNode.insertBefore(it.mount,it.pre);
+it.pre.style.display='none';
+},function(){
+var scratch=document.getElementById(id);
+if(scratch)scratch.parentNode.removeChild(scratch);
+scratch=document.getElementById('d'+id);
+if(scratch)scratch.parentNode.removeChild(scratch);
+if(gen!==renderGen)return;
+if(it.mount.parentNode)it.mount.parentNode.removeChild(it.mount);
+it.pre.style.display='';
+});
+});
+}
+render();
+if(mq&&mq.addEventListener)mq.addEventListener('change',render);
+if(typeof MutationObserver!=='undefined')new MutationObserver(render).observe(root,{attributes:true,attributeFilter:['data-theme']});
+})();</script>
+<!--claude-mermaid-runtime-end-->
+</body>
+</html>
