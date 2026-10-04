@@ -2,6 +2,7 @@ import tempfile
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from netmiko.exceptions import NetmikoTimeoutException
 
 import app.api as api_module
 from app.api import app
@@ -326,6 +327,45 @@ def test_api_audits_all_inventory_devices() -> None:
     }
 
 
+def test_api_audit_all_records_ssh_timeouts_without_failing_the_batch() -> None:
+    api_module.inventory_store.clear()
+    api_module.credential_store.clear()
+    api_module.scenario_store.clear()
+    api_module.collector = _TimeoutOnSecondCollector()
+
+    for device_id, host in (("lab-router-01", "192.0.2.21"), ("lab-router-02", "192.0.2.22")):
+        response = client.post(
+            "/devices",
+            json={
+                "device_id": device_id,
+                "host": host,
+                "device_type": "cisco_ios",
+                "username": "lab-user",
+                "password": "lab-password",
+            },
+        )
+        assert response.status_code == 201
+
+    response = client.post(
+        "/devices/audit-all",
+        json={
+            "scenario_id": "batch-audit-timeout",
+            "rules": scenario_payload()["rules"],
+            "requested_by": "operator-01",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["audited_count"] == 1
+    assert body["failed_count"] == 1
+    assert {item["status"] for item in body["results"]} == {"audited", "failed"}
+    assert "TCP connection to device failed" in (
+        next(item["detail"] for item in body["results"] if item["status"] == "failed")
+    )
+    assert api_module.inventory_store["lab-router-02"].status == "unreachable"
+
+
 def test_api_resets_scenarios_without_persisting_inventory() -> None:
     api_module.scenario_store["old-scenario"] = scenario_payload()
     api_module.inventory_store["R4"] = api_module.InventoryRecord(
@@ -397,6 +437,15 @@ class _FakeCollector:
 
 class _MultiCollector:
     def collect(self, target) -> str:
+        return "ntp server 10.10.10.20\n"
+
+
+class _TimeoutOnSecondCollector:
+    def collect(self, target) -> str:
+        if target.device_id == "lab-router-02":
+            raise NetmikoTimeoutException(
+                "TCP connection to device failed.\n\nDevice settings: cisco_ios 192.0.2.22:22\n"
+            )
         return "ntp server 10.10.10.20\n"
 
 

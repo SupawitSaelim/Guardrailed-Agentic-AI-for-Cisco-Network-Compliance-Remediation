@@ -39,6 +39,12 @@ class NetmikoCollector:
         connection = self.connection_factory(
             device_type=target.device_type,
             host=target.host,
+            ssh_strict=False,
+            use_keys=False,
+            allow_agent=False,
+            conn_timeout=10,
+            auth_timeout=10,
+            banner_timeout=15,
             **connection_parameters,
         )
         try:

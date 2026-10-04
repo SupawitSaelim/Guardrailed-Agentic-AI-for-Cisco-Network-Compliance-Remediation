@@ -20,6 +20,16 @@ from app.llm import MockLLMProvider
 from app.models import ComplianceRule, Finding, RemediationPlan, ValidationResult
 from app.workflow import WorkflowOrchestrator, WorkflowResult, LiveWorkflowResult
 
+COLLECTION_ERRORS = (
+    NetmikoBaseException,
+    SSHException,
+    EOFError,
+    RuntimeError,
+    ValueError,
+    OSError,
+    TimeoutError,
+)
+
 
 app = FastAPI(title="Guardrailed Cisco Compliance API", version="0.1.0")
 approval_service = ApprovalService()
@@ -455,7 +465,7 @@ def audit_device(device_id: str, request: DeviceAuditRequest):
             request.requested_by,
             generate_plans=not request.manual_remediation,
         )
-    except (NetmikoBaseException, RuntimeError, ValueError, OSError) as error:
+    except COLLECTION_ERRORS as error:
         updated = device.model_copy(update={"status": "unreachable"})
         with scenario_lock:
             inventory_store[device_id] = updated
@@ -496,7 +506,7 @@ def audit_all_devices(request: DeviceAuditRequest) -> BatchAuditResult:
                 request.requested_by,
                 generate_plans=not request.manual_remediation,
             )
-        except (NetmikoBaseException, RuntimeError, ValueError, OSError) as error:
+        except COLLECTION_ERRORS as error:
             with scenario_lock:
                 inventory_store[device.device_id] = device.model_copy(
                     update={"status": "unreachable"}
@@ -696,7 +706,7 @@ def execute_all_scenarios() -> BatchExecutionResult:
                 record.rules,
                 executor,
             )
-        except (NetmikoBaseException, PermissionError, RuntimeError, ValueError, OSError) as error:
+        except (*COLLECTION_ERRORS, PermissionError) as error:
             results.append(
                 BatchExecutionItem(
                     scenario_id=record.scenario_id,
@@ -754,7 +764,7 @@ def execute_scenario(scenario_id: str):
             record.rules,
             executor,
         )
-    except (NetmikoBaseException, PermissionError, RuntimeError, ValueError, OSError) as error:
+    except (*COLLECTION_ERRORS, PermissionError) as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     updated = record.model_copy(update={"live": live})
     with scenario_lock:
