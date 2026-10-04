@@ -90,6 +90,7 @@ Scenario endpoints used by the control-plane prototype:
 POST /scenarios/audit
 GET  /scenarios/{scenario_id}
 POST /scenarios/{scenario_id}/execute
+POST /scenarios/reset
 POST /devices
 GET  /devices
 POST /devices/{device_id}/audit
@@ -116,6 +117,12 @@ in the device table. This JSON persistence is intended for the local Lab only;
 use a proper secret manager and database before deploying beyond the lab. The
 backend collects `show running-config` before starting the same audit and
 approval workflow. Remediation execution remains separately gated and lab-only.
+The Devices page is limited to inventory operations: viewing devices, adding
+or editing device metadata, opening SSH, and configuring shared credentials.
+It also provides a compact inventory summary, paginates long device lists at
+20 devices per page, and has a **Reload all devices** control for local
+testing. Reloading clears the current in-browser scenario and fetches the
+inventory again; it does not save or roll back configuration on any device.
 Each device also has an **SSH** button that opens a Lab-only interactive web
 terminal through a backend WebSocket. The browser never receives credentials;
 the backend owns the SSH connection and closes it when the terminal closes.
@@ -129,10 +136,11 @@ The chatbot never receives credentials and never connects to the device.
 
 The live Lab executor is configured in the API process with Netmiko. After a
 manual response is validated and its approval is recorded, use the UI's
-`Execute scenario` action to send the approved commands to the registered
-device. `Approve plan` alone records approval and does not write to the
-router. Execution then performs a fresh pre-check, sends the commands, reads
-the post-check configuration, and runs the full re-audit.
+`Execute scenario` action (or **Execute all approved** on the Approvals page)
+to send approved commands to registered devices. `Approve plan` alone records
+approval and does not write to the router. Execution then performs a fresh
+pre-check, sends the commands, reads the post-check configuration, and runs
+the full re-audit.
 
 The approval CLI can be run with:
 

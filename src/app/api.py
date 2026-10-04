@@ -315,6 +315,21 @@ def list_devices():
         return list(inventory_store.values())
 
 
+@app.post("/scenarios/reset")
+def reset_scenarios():
+    with scenario_lock:
+        scenario_store.clear()
+        for device_id, device in inventory_store.items():
+            inventory_store[device_id] = device.model_copy(
+                update={
+                    "status": "registered",
+                    "last_audit_scenario_id": None,
+                    "last_audit_status": None,
+                }
+            )
+    return {"cleared": True}
+
+
 @app.get("/settings/credentials")
 def get_global_credentials() -> GlobalCredentialStatus:
     return GlobalCredentialStatus(

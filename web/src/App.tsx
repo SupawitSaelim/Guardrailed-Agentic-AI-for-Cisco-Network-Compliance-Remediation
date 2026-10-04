@@ -10,10 +10,13 @@ import {
   CircleCheck,
   Clock3,
   FileClock,
+  KeyRound,
   LayoutDashboard,
   LoaderCircle,
+  MoreHorizontal,
   Network,
   PanelLeft,
+  Pencil,
   Plus,
   Search,
   Server,
@@ -165,6 +168,11 @@ function App() {
     password: '',
     secret: '',
   })
+  const [deviceTab, setDeviceTab] = useState<'inventory' | 'ssh'>('inventory')
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [devicePage, setDevicePage] = useState(0)
+  const DEVICE_PAGE_SIZE = 20
   const terminalDeviceId = new URLSearchParams(window.location.search).get('device_id')
   const isTerminalPage = window.location.pathname === '/terminal'
 
@@ -194,34 +202,27 @@ function App() {
     }
   }
 
-  const showNotice = (message: string) => {
-    setNotice(message)
-    window.setTimeout(() => setNotice(''), 2800)
-  }
-
-  const auditDevice = async (device: Device) => {
+  const reloadAllDevices = async () => {
     setBusy(true)
     setError('')
+    // Reload only the current UI state; device edits and credentials are not changed.
+    setScenario(null)
+    setSelectedId('')
+    setPrompt(null)
+    setChatbotResponse('')
+    setDevicePage(0)
     try {
-      const next = await request<Scenario>(`/devices/${device.device_id}/audit`, {
-        method: 'POST',
-        body: JSON.stringify({
-          scenario_id: `audit-${device.device_id}-${Date.now()}`,
-          rules,
-          requested_by: 'operator-01',
-        }),
-      })
-      setScenario(next)
-      setSelectedId(next.workflow.approvals[0]?.approval_id ?? '')
-      setActiveView('Approvals')
-      showNotice(`Audit complete for ${device.device_id}.`)
+      await request<{ cleared: boolean }>('/scenarios/reset', { method: 'POST' })
       await loadDevices()
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Live audit failed')
-      await loadDevices()
+      showNotice('Devices reloaded. Scenario state cleared — ready for a new test run.')
     } finally {
       setBusy(false)
     }
+  }
+
+  const showNotice = (message: string) => {
+    setNotice(message)
+    window.setTimeout(() => setNotice(''), 2800)
   }
 
   const registerDevice = async (event: FormEvent<HTMLFormElement>) => {
@@ -514,35 +515,143 @@ function App() {
       <main className="main-content">
         <header className="topbar"><div className="mobile-brand"><div className="brand-mark"><ShieldCheck size={18} /></div><strong>Sentinel</strong></div><div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{activeView}</strong></div><div className="top-actions"><button className="icon-button" title="Search" aria-label="Search" type="button"><Search size={18} /></button><div className="top-avatar">AK</div></div></header>
         <div className="content-wrap">
-          <section className="page-heading"><div><p className="eyebrow">CONTROL CENTER <span>•</span> OCT 03, 2026</p><h1>{activeView}</h1><p className="subheading">Review proposed network changes before they reach your lab.</p></div><button className="approve-button audit-button" disabled={busy} onClick={runAudit} type="button">{busy ? <LoaderCircle className="spin" size={16} /> : <Activity size={16} />}Run audit</button></section>
+          <section className="page-heading"><div><p className="eyebrow">CONTROL CENTER <span>•</span> OCT 03, 2026</p><h1>{activeView}</h1><p className="subheading">Review proposed network changes before they reach your lab.</p></div><div className="heading-actions">{activeView === 'Devices' && <button className="approve-button audit-button" disabled={busy} onClick={reloadAllDevices} title="Clear the current test scenario and reload inventory" type="button">{busy ? <LoaderCircle className="spin" size={16} /> : <Server size={16} />}Reload all devices</button>}{(activeView === 'Overview' || activeView === 'Approvals') && <button className="approve-button audit-button" disabled={busy} onClick={runAudit} type="button">{busy ? <LoaderCircle className="spin" size={16} /> : <Activity size={16} />}Run audit</button>}{activeView === 'Approvals' && <button className="execute-button heading-execute-button" disabled={busy} onClick={executeAll} type="button">{busy ? <LoaderCircle className="spin" size={16} /> : <ArrowUpRight size={16} />}Execute all approved</button>}</div></section>
           {error && <div className="error-banner"><CircleAlert size={17} />{error}</div>}
-          {activeView === 'Devices' ? <section className="inventory-layout">
-            <div className="panel inventory-form-panel">
-              <div className="panel-heading"><div><span className="section-kicker">LAB INVENTORY</span><h2>Add device</h2></div><Server size={20} /></div>
-              <form className="device-form" onSubmit={editingDeviceId ? saveDevice : registerDevice}>
-                <label>Device ID<input required value={deviceForm.device_id} onChange={(event) => setDeviceForm({ ...deviceForm, device_id: event.target.value })} placeholder="lab-router-01" /></label>
-                <label>IP address / hostname<input required value={deviceForm.host} onChange={(event) => setDeviceForm({ ...deviceForm, host: event.target.value })} placeholder="192.0.2.10" /></label>
-                <label>Device type<select value={deviceForm.device_type} onChange={(event) => setDeviceForm({ ...deviceForm, device_type: event.target.value })}><option value="cisco_ios">Cisco IOS</option><option value="cisco_xe">Cisco IOS XE</option></select></label>
-                <p className="form-help">SSH credentials are configured once in the Global SSH settings panel and used for every lab device.</p>
-                <div className="form-actions"><button className="approve-button audit-button" disabled={busy} type="submit">{editingDeviceId ? <Check size={16} /> : <Plus size={16} />}{editingDeviceId ? 'Save device changes' : 'Add lab device'}</button>{editingDeviceId && <button className="filter-button" disabled={busy} onClick={cancelDeviceEdit} type="button">Cancel</button>}</div>
-              </form>
+          {activeView === 'Devices' ? <section className="devices-page">
+            {/* ── Page header ── */}
+            <div className="devices-header">
+              <div className="devices-tabs">
+                <button className={`dev-tab ${deviceTab === 'inventory' ? 'active' : ''}`} onClick={() => setDeviceTab('inventory')} type="button"><Network size={14} />Inventory <span className="count-pill">{devices.length}</span></button>
+                <button className={`dev-tab ${deviceTab === 'ssh' ? 'active' : ''}`} onClick={() => setDeviceTab('ssh')} type="button"><KeyRound size={14} />SSH Settings</button>
+              </div>
+              <div className="devices-header-actions">
+                <button className="filter-button" onClick={loadDevices} type="button">Refresh</button>
+                {deviceTab === 'inventory' && <button className="approve-button audit-button" onClick={() => { setShowAddForm(true); setDeviceTab('inventory') }} type="button"><Plus size={14} />Add device</button>}
+              </div>
             </div>
-            <div className="panel inventory-form-panel">
-              <div className="panel-heading"><div><span className="section-kicker">GLOBAL SSH SETTINGS</span><h2>Connection credentials</h2></div><Server size={20} /></div>
-              <form className="device-form" onSubmit={saveCredentials}>
-                <label>Username<input required autoComplete="username" value={credentialForm.username} onChange={(event) => setCredentialForm({ ...credentialForm, username: event.target.value })} placeholder="admin" /></label>
-                <label>Password<input required type="password" autoComplete="current-password" value={credentialForm.password} onChange={(event) => setCredentialForm({ ...credentialForm, password: event.target.value })} placeholder="Enter to update" /></label>
-                <label>Enable secret <span className="optional-label">(optional)</span><input type="password" autoComplete="off" value={credentialForm.secret} onChange={(event) => setCredentialForm({ ...credentialForm, secret: event.target.value })} placeholder="Optional" /></label>
-                <label>SSH port<input required type="number" min="1" max="65535" value={credentialForm.port} onChange={(event) => setCredentialForm({ ...credentialForm, port: event.target.value })} /></label>
-                <p className="form-help">Saved in the local Lab JSON database and never returned to the device list.</p>
-                <button className="approve-button audit-button" disabled={busy} type="submit"><Check size={16} />Save global SSH settings</button>
-              </form>
-            </div>
-            <div className="panel inventory-list-panel">
-              <div className="panel-heading"><div><span className="section-kicker">REGISTERED DEVICES</span><h2>Virtual Lab <span className="count-pill">{devices.length}</span></h2></div><div className="panel-actions"><button className="filter-button" onClick={loadDevices} type="button">Refresh</button><button className="execute-button compact" disabled={busy || devices.length === 0} onClick={executeAll} type="button"><ArrowUpRight size={15} />Execute all approved</button></div></div>
-              <div className="device-table">{devices.map((device) => <div className="device-card" key={device.device_id}><div className="device-card-icon"><Network size={18} /></div><div className="device-card-main"><strong>{device.device_id}</strong><span>{device.target.host} · {device.target.device_type}</span><small>Credential profile: {device.credential_profile}</small></div><span className={`inventory-status ${device.status}`}>{device.status}</span><button className="filter-button" disabled={busy} onClick={() => editDevice(device)} type="button">Edit</button><button className="filter-button" disabled={busy} onClick={() => openTerminal(device)} type="button"><Terminal size={14} />SSH</button><button className="approve-button audit-button" disabled={busy} onClick={() => auditDevice(device)} type="button"><Activity size={15} />Audit</button></div>)}</div>
-              {devices.length === 0 && <div className="empty-state"><Server size={22} /><p>No lab devices registered yet. Add a device to start a live audit.</p></div>}
-            </div>
+
+            {/* ── Inventory tab ── */}
+            {deviceTab === 'inventory' && <div className="devices-body">
+              {/* Add / Edit form slide-in */}
+              {(showAddForm || editingDeviceId) && <div className="panel device-form-card">
+                <div className="panel-heading"><div><span className="section-kicker">{editingDeviceId ? 'EDIT DEVICE' : 'NEW DEVICE'}</span><h2>{editingDeviceId ? `Editing ${editingDeviceId}` : 'Register lab device'}</h2></div><button className="icon-button" onClick={() => { setShowAddForm(false); cancelDeviceEdit() }} type="button"><X size={16} /></button></div>
+                <form className="device-form" onSubmit={editingDeviceId ? saveDevice : registerDevice}>
+                  <div className="device-form-row">
+                    <label>Device ID<input required value={deviceForm.device_id} onChange={(event) => setDeviceForm({ ...deviceForm, device_id: event.target.value })} placeholder="lab-router-01" /></label>
+                    <label>IP / Hostname<input required value={deviceForm.host} onChange={(event) => setDeviceForm({ ...deviceForm, host: event.target.value })} placeholder="192.0.2.10" /></label>
+                    <label>Device type<select value={deviceForm.device_type} onChange={(event) => setDeviceForm({ ...deviceForm, device_type: event.target.value })}><option value="cisco_ios">Cisco IOS</option><option value="cisco_xe">Cisco IOS XE</option></select></label>
+                  </div>
+                  <p className="form-help">SSH credentials are shared across all devices — configure them in the SSH Settings tab.</p>
+                  <div className="form-actions">
+                    <button className="approve-button audit-button" disabled={busy} type="submit">{editingDeviceId ? <Check size={15} /> : <Plus size={15} />}{editingDeviceId ? 'Save changes' : 'Register device'}</button>
+                    <button className="filter-button" disabled={busy} onClick={() => { setShowAddForm(false); cancelDeviceEdit() }} type="button">Cancel</button>
+                  </div>
+                </form>
+              </div>}
+
+              {/* Device list */}
+              <div className="panel devices-list-panel">
+                <div className="panel-heading"><div><span className="section-kicker">REGISTERED DEVICES</span><h2>Virtual Lab <span className="count-pill">{devices.length}</span></h2></div></div>
+
+                {/* Summary stats bar */}
+                {devices.length > 0 && (() => {
+                  const reachable = devices.filter(d => d.status === 'reachable').length
+                  const unreachable = devices.filter(d => d.status === 'unreachable').length
+                  const notAudited = devices.filter(d => !d.last_audit_status).length
+                  const withFindings = devices.filter(d => d.last_audit_status && d.last_audit_status !== 'compliant').length
+                  return (
+                    <div className="device-summary-bar">
+                      <div className="dsb-item"><span className="dsb-num">{devices.length}</span><span className="dsb-label">Total</span></div>
+                      <div className="dsb-sep" />
+                      <div className="dsb-item"><span className="dsb-num green">{reachable}</span><span className="dsb-label">Reachable</span></div>
+                      <div className="dsb-item"><span className="dsb-num red">{unreachable}</span><span className="dsb-label">Unreachable</span></div>
+                      <div className="dsb-sep" />
+                      <div className="dsb-item"><span className="dsb-num orange">{withFindings}</span><span className="dsb-label">Has findings</span></div>
+                      <div className="dsb-item"><span className="dsb-num muted">{notAudited}</span><span className="dsb-label">Not audited</span></div>
+                    </div>
+                  )
+                })()}
+
+                {/* Paginated device rows */}
+                <div className="device-table">
+                  {devices.slice(devicePage * DEVICE_PAGE_SIZE, (devicePage + 1) * DEVICE_PAGE_SIZE).map((device) => {
+                    const menuOpen = openMenuId === device.device_id
+                    return (
+                      <div className="device-row" key={device.device_id}>
+                        <div className="device-row-icon"><Network size={17} /></div>
+                        <div className="device-row-body">
+                          <div className="device-row-top">
+                            <strong>{device.device_id}</strong>
+                            <span className={`inv-badge ${device.status}`}>{device.status}</span>
+                          </div>
+                          <div className="device-row-meta">
+                            <span>{device.target.host}</span>
+                            <span className="meta-sep">·</span>
+                            <span>{device.target.device_type === 'cisco_ios' ? 'Cisco IOS' : 'Cisco IOS XE'}</span>
+                          </div>
+                          {device.last_audit_status && (
+                            <div className="device-row-audit">
+                              <span className={`audit-badge ${device.last_audit_status}`}>{device.last_audit_status.replace('_', ' ')}</span>
+                              {device.last_audit_scenario_id && <span className="audit-id">{device.last_audit_scenario_id}</span>}
+                            </div>
+                          )}
+                          {!device.last_audit_status && <div className="device-row-audit"><span className="audit-badge no-audit">Not audited</span></div>}
+                        </div>
+                        <div className="device-row-actions">
+                          <button className="filter-button" disabled={busy} onClick={() => openTerminal(device)} title={`SSH to ${device.device_id}`} type="button"><Terminal size={13} />SSH</button>
+                          <div className="device-menu-wrap">
+                            <button className={`icon-button dev-menu-btn ${menuOpen ? 'active' : ''}`} onClick={() => setOpenMenuId(menuOpen ? null : device.device_id)} title="More options" type="button"><MoreHorizontal size={16} /></button>
+                            {menuOpen && <div className="dev-dropdown">
+                              <button className="dev-dropdown-item" onClick={() => { editDevice(device); setShowAddForm(false); setOpenMenuId(null) }} type="button"><Pencil size={13} />Edit device</button>
+                              <button className="dev-dropdown-item" onClick={() => { openTerminal(device); setOpenMenuId(null) }} type="button"><Terminal size={13} />SSH Terminal</button>
+                            </div>}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Pagination */}
+                {devices.length > DEVICE_PAGE_SIZE && (
+                  <div className="device-pagination">
+                    <span className="pg-info">Showing {devicePage * DEVICE_PAGE_SIZE + 1}–{Math.min((devicePage + 1) * DEVICE_PAGE_SIZE, devices.length)} of {devices.length}</span>
+                    <div className="pg-controls">
+                      <button className="filter-button" disabled={devicePage === 0} onClick={() => setDevicePage(p => p - 1)} type="button">← Prev</button>
+                      {Array.from({ length: Math.ceil(devices.length / DEVICE_PAGE_SIZE) }, (_, i) => (
+                        <button className={`pg-num ${i === devicePage ? 'active' : ''}`} key={i} onClick={() => setDevicePage(i)} type="button">{i + 1}</button>
+                      ))}
+                      <button className="filter-button" disabled={(devicePage + 1) * DEVICE_PAGE_SIZE >= devices.length} onClick={() => setDevicePage(p => p + 1)} type="button">Next →</button>
+                    </div>
+                  </div>
+                )}
+
+                {devices.length === 0 && <div className="empty-state">
+                  <Server size={26} />
+                  <p>No lab devices registered yet.</p>
+                  <button className="approve-button audit-button" onClick={() => setShowAddForm(true)} style={{ marginTop: 4 }} type="button"><Plus size={14} />Add your first device</button>
+                </div>}
+              </div>
+            </div>}
+
+            {/* ── SSH Settings tab ── */}
+            {deviceTab === 'ssh' && <div className="devices-body">
+              <div className="panel ssh-settings-panel">
+                <div className="panel-heading"><div><span className="section-kicker">GLOBAL SSH SETTINGS</span><h2>Connection credentials</h2></div><KeyRound size={20} /></div>
+                <form className="device-form" onSubmit={saveCredentials}>
+                  <div className="device-form-row">
+                    <label>Username<input required autoComplete="username" value={credentialForm.username} onChange={(event) => setCredentialForm({ ...credentialForm, username: event.target.value })} placeholder="admin" /></label>
+                    <label>Password<input required type="password" autoComplete="current-password" value={credentialForm.password} onChange={(event) => setCredentialForm({ ...credentialForm, password: event.target.value })} placeholder="Enter to update" /></label>
+                  </div>
+                  <div className="device-form-row">
+                    <label>Enable secret <span className="optional-label">(optional)</span><input type="password" autoComplete="off" value={credentialForm.secret} onChange={(event) => setCredentialForm({ ...credentialForm, secret: event.target.value })} placeholder="Leave blank if not set" /></label>
+                    <label>SSH port<input required type="number" min="1" max="65535" value={credentialForm.port} onChange={(event) => setCredentialForm({ ...credentialForm, port: event.target.value })} /></label>
+                  </div>
+                  <p className="form-help">These credentials apply to every device in the lab inventory. They are stored in the local JSON database and are never sent to the browser after saving.</p>
+                  <div className="form-actions"><button className="approve-button audit-button" disabled={busy} type="submit"><Check size={15} />Save credentials</button></div>
+                </form>
+              </div>
+            </div>}
           </section> : scenario?.workflow.status === 'awaiting_remediation' ? <section className="manual-remediation panel">
             <div className="panel-heading"><div><span className="section-kicker">MANUAL CHATBOT MODE</span><h2>Remediation needed</h2></div><Activity size={20} /></div>
             <div className="manual-finding"><strong>{scenario.workflow.findings[0]?.rule_id}</strong><span>{scenario.workflow.findings[0]?.severity} risk</span><p>Expected: {scenario.workflow.findings[0]?.expected}<br />Found: {scenario.workflow.findings[0]?.actual.join(', ') || 'No matching configuration'}</p></div>

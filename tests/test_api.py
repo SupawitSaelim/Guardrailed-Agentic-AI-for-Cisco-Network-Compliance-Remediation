@@ -326,6 +326,27 @@ def test_api_audits_all_inventory_devices() -> None:
     }
 
 
+def test_api_resets_scenarios_without_persisting_inventory() -> None:
+    api_module.scenario_store["old-scenario"] = scenario_payload()
+    api_module.inventory_store["R4"] = api_module.InventoryRecord(
+        device_id="R4",
+        target=LabTarget(device_id="R4", host="192.0.2.24", device_type="cisco_ios"),
+        credential_profile="global",
+        status="reachable",
+        last_audit_scenario_id="old-scenario",
+        last_audit_status="approval_pending",
+    )
+
+    response = client.post("/scenarios/reset")
+
+    assert response.status_code == 200
+    assert response.json() == {"cleared": True}
+    assert api_module.scenario_store == {}
+    assert api_module.inventory_store["R4"].status == "registered"
+    assert api_module.inventory_store["R4"].last_audit_scenario_id is None
+    assert api_module.inventory_store["R4"].last_audit_status is None
+
+
 def test_api_web_terminal_connects_and_returns_command_output(monkeypatch) -> None:
     api_module.inventory_store.clear()
     api_module.credential_store.clear()
