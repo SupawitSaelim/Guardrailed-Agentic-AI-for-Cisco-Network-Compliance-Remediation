@@ -27,7 +27,12 @@ class Planner(Protocol):
         ...
 
 
-WorkflowStatus = Literal["compliant", "approval_pending", "validation_failed"]
+WorkflowStatus = Literal[
+    "compliant",
+    "awaiting_remediation",
+    "approval_pending",
+    "validation_failed",
+]
 
 
 class WorkflowResult(BaseModel):
@@ -71,6 +76,7 @@ class WorkflowOrchestrator:
         rules: list[ComplianceRule],
         device_id: str,
         requested_by: str,
+        generate_plans: bool = True,
     ) -> WorkflowResult:
         source_hash = configuration_hash(configuration)
         self._record("workflow.started", {"device_id": device_id, "requested_by": requested_by})
@@ -86,6 +92,12 @@ class WorkflowOrchestrator:
         if audit_result.compliant:
             self._record("workflow.completed", {"status": "compliant"})
             return WorkflowResult(status="compliant", configuration_hash=source_hash)
+        if not generate_plans:
+            return WorkflowResult(
+                status="awaiting_remediation",
+                configuration_hash=source_hash,
+                findings=audit_result.findings,
+            )
 
         rules_by_id = {rule.rule_id: rule for rule in rules}
         plans: list[RemediationPlan] = []

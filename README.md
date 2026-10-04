@@ -93,6 +93,12 @@ POST /scenarios/{scenario_id}/execute
 POST /devices
 GET  /devices
 POST /devices/{device_id}/audit
+POST /devices/audit-all
+GET  /settings/credentials
+PUT  /settings/credentials
+WebSocket /devices/{device_id}/terminal
+GET  /scenarios/{scenario_id}/remediation-prompt
+POST /scenarios/{scenario_id}/remediation-response
 ```
 
 `/scenarios/audit` accepts a sanitized Lab configuration and versioned rules,
@@ -101,13 +107,32 @@ fail-closed: every generated approval must be approved and the API process must
 be configured with a Lab-only `ControlledExecutor`. Execution captures one
 pre-check/post-check pair for the scenario and returns the re-audit result.
 
-The Devices page accepts the lab username, password, and optional enable
-secret, but the backend stores them only in process memory. They are never
-returned by the inventory endpoints or displayed in the table. Restarting the
-API clears all credentials, so devices must be registered again before a live
-audit. The backend collects `show running-config` before starting the same
-audit and approval workflow. Remediation execution remains separately gated
-and lab-only.
+The Devices page stores lab device metadata in the local, gitignored
+`data/lab_inventory.json` file, so a backend reload does not remove the
+inventory. SSH username, password, optional enable secret, and port are
+configured once under **Global SSH settings** and reused for every device.
+Credential secrets are never returned by the inventory endpoints or displayed
+in the device table. This JSON persistence is intended for the local Lab only;
+use a proper secret manager and database before deploying beyond the lab. The
+backend collects `show running-config` before starting the same audit and
+approval workflow. Remediation execution remains separately gated and lab-only.
+Each device also has an **SSH** button that opens a Lab-only interactive web
+terminal through a backend WebSocket. The browser never receives credentials;
+the backend owns the SSH connection and closes it when the terminal closes.
+
+The frontend uses manual chatbot mode when an LLM API is not configured. A
+device audit collects the configuration and creates findings without an
+automatic plan. The operator copies the generated remediation prompt to a
+chatbot, pastes the JSON response back into the UI, and the backend performs
+schema, command, and scope validation before creating an approval request.
+The chatbot never receives credentials and never connects to the device.
+
+The live Lab executor is configured in the API process with Netmiko. After a
+manual response is validated and its approval is recorded, use the UI's
+`Execute scenario` action to send the approved commands to the registered
+device. `Approve plan` alone records approval and does not write to the
+router. Execution then performs a fresh pre-check, sends the commands, reads
+the post-check configuration, and runs the full re-audit.
 
 The approval CLI can be run with:
 

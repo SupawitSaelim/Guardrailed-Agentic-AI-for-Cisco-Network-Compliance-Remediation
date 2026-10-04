@@ -17,3 +17,6 @@ web/dist/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Local Lab inventory and credentials
+data/*.json
